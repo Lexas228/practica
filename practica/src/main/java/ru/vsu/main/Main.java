@@ -1,9 +1,20 @@
 package ru.vsu.main;
 
+import org.apache.commons.imaging.ImageInfo;
+import org.apache.commons.imaging.ImageParser;
+import org.apache.commons.imaging.ImageReadException;
+import org.apache.commons.imaging.common.bytesource.ByteSourceArray;
+import org.apache.commons.imaging.common.bytesource.ByteSourceInputStream;
+import org.apache.commons.imaging.formats.jpeg.JpegConstants;
+import org.apache.commons.imaging.formats.jpeg.JpegImageParser;
+import org.apache.commons.imaging.formats.tiff.JpegImageData;
+import org.apache.commons.imaging.formats.tiff.TiffImageParser;
+
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
+import javax.imageio.plugins.jpeg.JPEGImageReadParam;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -21,7 +32,16 @@ public class Main{
     private static final int[] pngBytes = new int[]{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xE0};
 
-    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException {
+    private static final Set<Integer> flags;
+    static {
+        flags = new HashSet<>();
+        flags.addAll(JpegConstants.MARKERS);
+    }
+    public Main(){
+
+    }
+
+    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, ImageReadException {
         Pair<byte[], byte[]> taskOne = solveTaskOne("data/dump_002.DMP", "data/encr_002");
         if (taskOne == null) {
             throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
@@ -29,27 +49,37 @@ public class Main{
         byte[] dataFromTaskOne = taskOne.getSecond();
 
         byte[] taskTwo = solveTaskTwo(dataFromTaskOne);
+        List<Byte> allMarkers = new ArrayList<>();
+        List<Byte> cleanFile = new ArrayList<>();
 
-
-        int k = 0;
         for(int i = 0; i < taskTwo.length; i++){
-            if(Byte.toUnsignedInt(taskTwo[i]) == 0xFF && i < taskTwo.length-1 && Byte.toUnsignedInt(taskTwo[i+1]) == 0xD8){
-                k++;
+            byte curr = taskTwo[i];
+            if(Byte.toUnsignedInt(curr) == 0xFF && flags.contains(Byte.toUnsignedInt(taskTwo[i+1]))){
+                allMarkers.add(curr);
+                allMarkers.add(taskTwo[i+1]);
+            }else if (Byte.toUnsignedInt(curr) != 0xFF){
+
+                cleanFile.add(curr);
             }
         }
-        System.out.println(k);
-/*
-        byte[] clean = new byte[taskTwo.length - 4];
 
-        System.arraycopy(taskTwo, 4, clean, 0, taskTwo.length - 4);
+        byte[] markersByteArray = new byte[allMarkers.size()];
+        byte[] cleanFileByteArray = new byte[cleanFile.size()];
+        for(int i = 0; i < allMarkers.size(); i++){
+            markersByteArray[i] = allMarkers.get(i);
+        }
+
+        for(int i = 0; i < allMarkers.size(); i++){
+            cleanFileByteArray[i] = cleanFile.get(i);
+        }
+        System.out.println(markersByteArray.length % 16);
+
+
 
         MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] hash = md.digest(clean);
-        byte[] keyFromTaskOne = taskOne.getFirst();
-        SecretKeySpec keySpec = createKeySpec(hash);
-        IvParameterSpec iv = new IvParameterSpec(keyFromTaskOne);
-        byte[] ans = decryptCbc(taskTwo, keySpec, iv);
-        System.out.println(new String(ans));*/
+        byte[] hash = md.digest(cleanFileByteArray);
+
+        byte[] bytes = decryptCbc(markersByteArray, new SecretKeySpec(hash, "AES"), new IvParameterSpec(taskOne.getFirst()));
 
 
     }
@@ -146,7 +176,7 @@ public class Main{
             InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
         cipher.init(Cipher.DECRYPT_MODE, key, ivParameterSpec);
         return cipher.doFinal(cipherText);
     }
