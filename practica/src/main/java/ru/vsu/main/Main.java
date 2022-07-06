@@ -16,8 +16,7 @@ import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class Main {
-
+public class Main{
     private static final String CipherMode = "AES/ECB/NoPadding";
     private static final int[] pngBytes = new int[]{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xD9};
@@ -30,10 +29,8 @@ public class Main {
 
         InputStream is = new ByteArrayInputStream(bytes);
         BufferedImage newBi = ImageIO.read(is);
-        int[][] pixels = getImageToPixels(newBi);
-
-
-
+        byte[] pixels = getImageToPixels(newBi);
+        System.out.println(pixels.length);
 
         String str = "password";
 
@@ -46,14 +43,15 @@ public class Main {
             boolean good = false;
             for(byte polyminal = -127; polyminal < 127; polyminal++){
                 int ans = crc8(passWordBytes, initial, polyminal);
-                allGoodPolynoms.add(polyminal);
                 if(ans == 0xCF){
-                   good = true;
+                    good = true;
 
                 }
+                allGoodPolynoms.add(polyminal);
             }
-            if(good)
-                allGoodInitial.add(initial);
+            allGoodInitial.add(initial);
+            //if(good)
+
         }
 
         Byte ansPol = null;
@@ -62,14 +60,14 @@ public class Main {
             for(Byte initByte : allGoodInitial){
                 boolean good = true;
                 for(int i = 0; i < 2; i++){
-                    int ans = crc8(BigInteger.valueOf(pixels[0][i]).toByteArray(), initByte, polByte);
+                    int ans = crc8(pixels[i], initByte, polByte);
+                    //System.out.println(ans);
                     if(ans != jpegBytes[i]) {
                         good = false;
                         break;
                     }
                 }
                 if(good){
-                    System.out.println("here");
                     ansPol = polByte;
                     ansInit = initByte;
                 }
@@ -82,37 +80,18 @@ public class Main {
         System.out.println("Полином " + ansPol);
         System.out.println("Инит " + ansInit);
 
-        List<Byte> byteList = new ArrayList<>();
-        for (int[] pixel : pixels) {
-            for (int i : pixel) {
-                byte[] data = BigInteger.valueOf(i).toByteArray();
-                byte ans = (byte) crc8(data, ansInit, ansPol);
-                byteList.add(ans);
-            }
+        byte[] data = new byte[pixels.length];
+
+        int i = 0;
+        for(byte b : pixels){
+            byte ans = (byte)crc8(b, ansInit, ansPol);
+            data[i] = ans;
+            i++;
         }
 
-
-        byte[] data = new byte[byteList.size()];
-        for(int i = 0; i < byteList.size(); i++){
-            data[i] = byteList.get(i);
-        }
-        System.out.println((byte)0xFF + " " + (byte) 0xD9);
-        System.out.println(data[data.length-2] + " " + data[data.length-1]);
         ByteArrayInputStream bis = new ByteArrayInputStream(data);
-        int read = bis.read();
         BufferedImage bImage2 = ImageIO.read(bis);
         ImageIO.write(bImage2, "jpeg", new File("./output1.jpeg") );
-
-
-
-
-
-
-
-
-
-
-
     }
 
     private static List<byte[]> getKey(byte[] data){
@@ -149,12 +128,13 @@ public class Main {
                 }
             }
             if(good) {
-                System.out.println("Ключ найден. " + new String(key));
+                System.out.println("Первое задание решено! Ключ = " + new String(key));
                 return ans;
             }
         }
         return null;
     }
+
     
     private static byte[] readData(String path) throws IOException {
         ClassLoader classLoader = Main.class.getClassLoader();
@@ -164,17 +144,18 @@ public class Main {
         return bytes;
     }
 
-    public static int[][] getImageToPixels(BufferedImage bufferedImage) {
+    public static byte[] getImageToPixels(BufferedImage bufferedImage) {
         if (bufferedImage == null) {
             throw new IllegalArgumentException();
         }
-        int h = bufferedImage.getHeight();
+        return ((DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
+    /*    int h = bufferedImage.getHeight();
         int w = bufferedImage.getWidth();
         int[][] pixels = new int[h][w];
         for (int i = 0; i < h; i++) {
             bufferedImage.getRGB(0, i, w, 1, pixels[i], 0, w);
         }
-        return pixels;
+        return pixels;*/
     }
 
 
