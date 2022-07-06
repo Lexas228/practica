@@ -1,68 +1,56 @@
 package ru.vsu.main;
 
 import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class Main{
-    private static final String CipherMode = "AES/ECB/NoPadding";
     private static final int[] pngBytes = new int[]{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
-    private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xD9};
+    private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xE0};
 
-    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
-        byte[] bytes = solveTaskOne("data/dump_002.DMP", "data/encr_002");
-        if (bytes == null) {
+    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException {
+        Pair<byte[], byte[]> taskOne = solveTaskOne("data/dump_002.DMP", "data/encr_002");
+        if (taskOne == null) {
             throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
         }
-        System.out.println(Integer.toHexString(bytes[0]));
+        byte[] dataFromTaskOne = taskOne.getSecond();
 
-        InputStream is = new ByteArrayInputStream(bytes);
-        BufferedImage newBi = ImageIO.read(is);
-        List<Integer> byteList = new ArrayList<>();
-        for(int i = 0; i < newBi.getWidth(); i++){
-            for(int j = 0; j < newBi.getHeight(); j++){
-                Color c = new Color(newBi.getRGB(i, j), true);
-                //System.out.println( newBi.getRGB(i, j) + " " + Integer.toHexString(newBi.getRGB(i, j) & 0xFF));
-                int red = c.getRed();
-                int green = c.getGreen();
-                int blue = c.getBlue();
-                int alpha = c.getAlpha();
-                byte RGB = (byte)((red << 5) | (green << 2) | blue);
-                System.out.println(Integer.toHexString(red) + " " + Integer.toHexString(green) + " " + Integer.toHexString(blue) + " " + Integer.toHexString(alpha));
-
-                //byte[] b = new byte[]{(byte) red, (byte) green, (byte) blue, (byte) alpha};
-                //byteList.add(crc8(RGB));
+        byte[] taskTwo = solveTaskTwo(dataFromTaskOne);
 
 
+        int k = 0;
+        for(int i = 0; i < taskTwo.length; i++){
+            if(Byte.toUnsignedInt(taskTwo[i]) == 0xFF && i < taskTwo.length-1 && Byte.toUnsignedInt(taskTwo[i+1]) == 0xD8){
+                k++;
             }
-            return;
         }
-        byte[] answer = new byte[byteList.size()];
-        for(int i = 0; i < answer.length; i++){
-            answer[i] = byteList.get(i).byteValue();
-        }
-        System.out.println((answer[0]) + " " + jpegBytes[0] + " " + pngBytes[0]);
-        System.out.println((answer[1]) + " " + jpegBytes[1] + " " + pngBytes[1]);
+        System.out.println(k);
+/*
+        byte[] clean = new byte[taskTwo.length - 4];
 
+        System.arraycopy(taskTwo, 4, clean, 0, taskTwo.length - 4);
 
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] hash = md.digest(clean);
+        byte[] keyFromTaskOne = taskOne.getFirst();
+        SecretKeySpec keySpec = createKeySpec(hash);
+        IvParameterSpec iv = new IvParameterSpec(keyFromTaskOne);
+        byte[] ans = decryptCbc(taskTwo, keySpec, iv);
+        System.out.println(new String(ans));*/
 
-        /*ByteArrayInputStream bis = new ByteArrayInputStream(answer);
-        BufferedImage bImage2 = ImageIO.read(bis);
-        ImageIO.write(bImage2, "jpg", new File("./output.jpg"));*/
 
     }
 
@@ -84,14 +72,14 @@ public class Main{
     }
 
 
-    private static byte[] solveTaskOne(String pathToDump, String pathToData) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+    private static Pair<byte[], byte[]> solveTaskOne(String pathToDump, String pathToData) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
 
         byte[] dumpInBytes = readData(pathToDump);
         byte[] encrDataInBytes = readData(pathToData);
         List<byte[]> keys = getKey(dumpInBytes);
 
         for(byte[] key : keys){
-            byte[] ans = decrypt(encrDataInBytes, createKeySpec(key));
+            byte[] ans = decryptEcb(encrDataInBytes, createKeySpec(key));
             boolean good = true;
             for(int i = 0; i < pngBytes.length; i++){
                 if(Byte.toUnsignedInt(ans[i]) != pngBytes[i]){
@@ -101,10 +89,38 @@ public class Main{
             }
             if(good) {
                 System.out.println("Первое задание решено! Ключ = " + new String(key));
-                return ans;
+                return new Pair<>(key, ans);
             }
         }
         return null;
+    }
+
+    private static byte[] solveTaskTwo(byte[] arrayOfTaskOne) throws IOException {
+        InputStream is = new ByteArrayInputStream(arrayOfTaskOne);
+        BufferedImage newBi = ImageIO.read(is);
+        List<Integer> byteList = new ArrayList<>();
+        for(int i = 0; i < newBi.getHeight(); i++){
+            for(int j = 0; j < newBi.getWidth(); j++){
+                Color c = new Color(newBi.getRGB(j, i), false);;
+                int red = c.getRed();
+                int green = c.getGreen();
+                int blue = c.getBlue();
+                byte[] be = new byte[]{(byte) blue, (byte) green,   (byte) red, (byte)0x00};
+                int i1 = crc8(be);
+                byteList.add(i1);
+            }
+        }
+        byte[] answer = new byte[byteList.size()];
+        for(int i = 0; i < answer.length; i++){
+            answer[i] = byteList.get(i).byteValue();
+        }
+        for(int i = 0; i < 4; i++){
+            if(Byte.toUnsignedInt(answer[i]) != jpegBytes[i]){
+                throw new IllegalArgumentException("Ошибка во втором здании, формат не jpeg!");
+            }
+        }
+        System.out.println("Задание два решено успешно!");
+        return answer;
     }
 
     
@@ -116,26 +132,22 @@ public class Main{
         return bytes;
     }
 
-    public static int[][] getImageToPixels(BufferedImage bufferedImage) {
-        if (bufferedImage == null) {
-            throw new IllegalArgumentException();
-        }
-        int h = bufferedImage.getHeight();
-        int w = bufferedImage.getWidth();
-        int[][] pixels = new int[h][w];
-        for (int i = 0; i < h; i++) {
-            bufferedImage.getRGB(0, i, w, 1, pixels[i], 0, w);
-        }
-        return pixels;
-    }
 
-
-    private static byte[] decrypt(byte[] cipherText, SecretKey key) throws NoSuchPaddingException, NoSuchAlgorithmException,
+    private static byte[] decryptEcb(byte[] cipherText, SecretKey key) throws NoSuchPaddingException, NoSuchAlgorithmException,
             InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException {
 
-        Cipher cipher = Cipher.getInstance(CipherMode);
+        Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, key);
+        return cipher.doFinal(cipherText);
+    }
+
+    private static byte[] decryptCbc(byte[] cipherText, SecretKey key, IvParameterSpec ivParameterSpec) throws NoSuchPaddingException, NoSuchAlgorithmException,
+            InvalidKeyException,
+            BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
+
+        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, key, ivParameterSpec);
         return cipher.doFinal(cipherText);
     }
 
