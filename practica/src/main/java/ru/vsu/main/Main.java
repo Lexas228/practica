@@ -6,6 +6,8 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.*;
 import java.io.*;
+import java.math.BigInteger;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -16,110 +18,163 @@ import java.util.stream.Collectors;
 
 public class Main {
 
-    private static final String CipherMode = "AES/ECB/PKCS5Padding";
-    public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
-        ClassLoader classLoader = Main.class.getClassLoader();
-        InputStream inputStream = classLoader.getResourceAsStream("data/dump_002.DMP");
-        byte[] bytes = new byte[inputStream.available()];
-        inputStream.read(bytes);
-        Map<String, Integer> all = new HashMap<>();
+    private static final String CipherMode = "AES/ECB/NoPadding";
+    private static final int[] pngBytes = new int[]{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xD9};
+
+    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
+        byte[] bytes = solveTaskOne("data/dump_002.DMP", "data/encr_002");
+        if(bytes == null){
+            throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
+        }
+
+        InputStream is = new ByteArrayInputStream(bytes);
+        BufferedImage newBi = ImageIO.read(is);
+        int[][] pixels = getImageToPixels(newBi);
 
 
-        for(int i = 0; i < bytes.length; i++){
-            byte[] k = new byte[16];
-            int s = 0;
-            for(int j = i; j < i+16 && j < bytes.length; j++){
-                k[s] = bytes[j];
-                s++;
+
+
+        String str = "password";
+
+        byte[] passWordBytes = str.getBytes(StandardCharsets.UTF_8);
+
+        List<Byte> allGoodInitial = new ArrayList<>();
+        List<Byte> allGoodPolynoms = new ArrayList<>();
+
+        for(byte initial = -127; initial < 127; initial++){
+            boolean good = false;
+            for(byte polyminal = -127; polyminal < 127; polyminal++){
+                int ans = crc8(passWordBytes, initial, polyminal);
+                allGoodPolynoms.add(polyminal);
+                if(ans == 0xCF){
+                   good = true;
+
+                }
             }
+            if(good)
+                allGoodInitial.add(initial);
+        }
 
-            if(s == 16){
-                String l = new String(k);
+        Byte ansPol = null;
+        Byte ansInit = null;
+        for(Byte polByte : allGoodPolynoms){
+            for(Byte initByte : allGoodInitial){
                 boolean good = true;
-                for(int p = 0; p < l.length(); p++){
-                    if(!Character.isDigit(l.charAt(p))){
+                for(int i = 0; i < 2; i++){
+                    int ans = crc8(BigInteger.valueOf(pixels[0][i]).toByteArray(), initByte, polByte);
+                    if(ans != jpegBytes[i]) {
                         good = false;
                         break;
                     }
                 }
-                if(good) {
-                    int r = all.getOrDefault(new String(k), 0) + 1;
-                    all.put(new String(k), r);
+                if(good){
+                    System.out.println("here");
+                    ansPol = polByte;
+                    ansInit = initByte;
                 }
             }
-
         }
-        all.keySet().forEach(key -> {
-            if(all.get(key) == 2)
-                System.out.println(key);
-        });
-       // map.keySet().stream().filter(key -> map.get(key).equals(2)).forEach(System.out::println);
-        /*String data = readFromInputStream(inputStream);
-        System.out.println(generateKey(128).getEncoded().length);*/
-        //List<String> key = getKey(data);
-        //key.forEach(System.out::println);
 
+        if(ansPol == null){
+            throw new IllegalArgumentException("Полином не был найден! Что то не так");
+        }
+        System.out.println("Полином " + ansPol);
+        System.out.println("Инит " + ansInit);
 
-/*
-
-        InputStream streamOfCipherText = classLoader.getResourceAsStream("data/encr_002");
-        byte[] bytes = new byte[streamOfCipherText.available()];
-        streamOfCipherText.read(bytes);
-        int i = 0;
-        for(String k : key){
-
-            try {
-                byte[] ans = decrypt(bytes, createKeySpec(k));
-                DataBuffer buffer = new DataBufferByte(ans, ans.length);
-                int width = 200;
-                int height = 200;
-
-                WritableRaster raster = Raster.createInterleavedRaster(buffer, width, height, 3 * width, 3, new int[] {0, 1, 2}, (Point)null);
-                ColorModel cm = new ComponentColorModel(ColorModel.getRGBdefault().getColorSpace(), false, true, Transparency.OPAQUE, DataBuffer.TYPE_BYTE);
-                BufferedImage image = new BufferedImage(cm, raster, true, null);
-
-                ImageIO.write(image, "png", new File("image" + i + ".png"));
-            }catch (Throwable ignored){
-                System.out.println(ignored);
+        List<Byte> byteList = new ArrayList<>();
+        for (int[] pixel : pixels) {
+            for (int i : pixel) {
+                byte[] data = BigInteger.valueOf(i).toByteArray();
+                byte ans = (byte) crc8(data, ansInit, ansPol);
+                byteList.add(ans);
             }
-            i++;
         }
 
-*/
+
+        byte[] data = new byte[byteList.size()];
+        for(int i = 0; i < byteList.size(); i++){
+            data[i] = byteList.get(i);
+        }
+        System.out.println((byte)0xFF + " " + (byte) 0xD9);
+        System.out.println(data[data.length-2] + " " + data[data.length-1]);
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        int read = bis.read();
+        BufferedImage bImage2 = ImageIO.read(bis);
+        ImageIO.write(bImage2, "jpeg", new File("./output1.jpeg") );
+
+
+
+
+
+
+
+
+
+
 
     }
 
+    private static List<byte[]> getKey(byte[] data){
+        Map<BitSet, Integer> allCount = new HashMap<>();
 
+        for(int i = 0; i < data.length; i++){
+            byte[] b = new byte[16];
 
-
-    private static String readFromInputStream(InputStream inputStream) throws IOException {
-        StringBuilder resultStringBuilder = new StringBuilder();
-        try (BufferedReader br
-                     = new BufferedReader(new InputStreamReader(inputStream))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                resultStringBuilder.append(line);
+            for(int j = i, s = 0; j < i + 16 && j < data.length; j++, s++){
+                b[s] = data[j];
+            }
+            BitSet bs = BitSet.valueOf(b);
+            if(bs.size() == 128 && bs.toByteArray().length == 16){
+                allCount.put(bs, allCount.getOrDefault(bs, 0) +1);
             }
         }
-        return resultStringBuilder.toString();
+        return allCount.keySet().stream().filter(key -> allCount.get(key).equals(2)).map(BitSet::toByteArray).collect(Collectors.toList());
     }
 
-    private static List<String> getKey(String data){
-        Map<String, Integer> allCount = new HashMap<>();
 
-        for(int i = 0; i < data.length(); i++){
-            StringBuilder builder = new StringBuilder();
-            for(int j = i; j < i + 15 && j < data.length(); j++){
-                char ch  = data.charAt(j);
-                builder.append(ch);
+    private static byte[] solveTaskOne(String pathToDump, String pathToData) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
 
+        byte[] dumpInBytes = readData(pathToDump);
+        byte[] encrDataInBytes = readData(pathToData);
+        List<byte[]> keys = getKey(dumpInBytes);
+
+        for(byte[] key : keys){
+            byte[] ans = decrypt(encrDataInBytes, createKeySpec(key));
+            boolean good = true;
+            for(int i = 0; i < pngBytes.length; i++){
+                if(Byte.toUnsignedInt(ans[i]) != pngBytes[i]){
+                    good = false;
+                    break;
+                }
             }
-            if(builder.toString().length() == 15){
-                int count = allCount.getOrDefault(builder.toString(), 0) +1;
-                allCount.put(builder.toString(), count);
+            if(good) {
+                System.out.println("Ключ найден. " + new String(key));
+                return ans;
             }
         }
-        return allCount.keySet().stream().filter(key -> allCount.get(key).equals(2)).collect(Collectors.toList());
+        return null;
+    }
+    
+    private static byte[] readData(String path) throws IOException {
+        ClassLoader classLoader = Main.class.getClassLoader();
+        InputStream inputStream = classLoader.getResourceAsStream(path);
+        byte[] bytes = new byte[Objects.requireNonNull(inputStream).available()];
+        int read = inputStream.read(bytes);
+        return bytes;
+    }
+
+    public static int[][] getImageToPixels(BufferedImage bufferedImage) {
+        if (bufferedImage == null) {
+            throw new IllegalArgumentException();
+        }
+        int h = bufferedImage.getHeight();
+        int w = bufferedImage.getWidth();
+        int[][] pixels = new int[h][w];
+        for (int i = 0; i < h; i++) {
+            bufferedImage.getRGB(0, i, w, 1, pixels[i], 0, w);
+        }
+        return pixels;
     }
 
 
@@ -127,60 +182,47 @@ public class Main {
             InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException {
 
-        Cipher cipher = Cipher.getInstance("AES");
+        Cipher cipher = Cipher.getInstance(CipherMode);
         cipher.init(Cipher.DECRYPT_MODE, key);
         return cipher.doFinal(cipherText);
     }
 
-    private static SecretKeySpec createKeySpec(String key){
-        return new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
+
+    private static SecretKeySpec createKeySpec(byte[] key){
+        return new SecretKeySpec(key, "AES");
     }
 
-    private static byte[] hex2byte(String inputString) {
-        if (inputString == null || inputString.length() < 2) {
-            return new byte[0];
+
+    public static int crc8(byte[] data, byte crcInit, byte poly) {
+        int _crc = crcInit;
+        for (int value : data) {
+            _crc = _crc ^ value;
+            for (int i = 8; i > 0; i--) {
+                if ((_crc & (1 << 7)) > 0) {
+                    _crc <<= 1;
+                    _crc ^= poly;
+                } else {
+                    _crc <<= 1;
+                }
+            }
         }
-        inputString = inputString.toLowerCase();
-        int l = inputString.length() / 2;
-        byte[] result = new byte[l];
-        for (int i = 0; i < l; ++i) {
-            String tmp = inputString.substring(2 * i, 2 * i + 2);
-            result[i] = (byte) (Integer.parseInt(tmp, 16) & 0xFF);
-        }
-        return result;
+       return  (_crc & 0xff);
     }
 
-    public static byte[] getFile() {
-
-        File f = new File("/home/bridgeit/Desktop/Olympics.jpg");
-        InputStream is = null;
-        try {
-            is = new FileInputStream(f);
-        } catch (FileNotFoundException e2) {
-            // TODO Auto-generated catch block
-            e2.printStackTrace();
+    public static int crc8(byte data, byte crcInit, byte poly) {
+        int _crc = crcInit ^ data;
+        for (int i = 8; i > 0; i--) {
+            if ((_crc & (1 << 7)) > 0) {
+                _crc <<= 1;
+                _crc ^= poly;
+            } else {
+                _crc <<= 1;
+            }
         }
-        byte[] content = null;
-        try {
-            content = new byte[is.available()];
-        } catch (IOException e1) {
-            // TODO Auto-generated catch block
-            e1.printStackTrace();
-        }
-        try {
-            is.read(content);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
-        return content;
+        return  (_crc & 0xff);
     }
 
-    public static SecretKey generateKey(int n) throws NoSuchAlgorithmException {
-        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-        keyGenerator.init(n);
-        SecretKey key = keyGenerator.generateKey();
-        return key;
+    public static int uint(byte v) {
+        return v & 0xFF;
     }
 }
