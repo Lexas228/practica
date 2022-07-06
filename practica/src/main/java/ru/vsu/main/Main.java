@@ -4,12 +4,14 @@ import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.image.*;
-import java.io.*;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -23,75 +25,45 @@ public class Main{
 
     public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
         byte[] bytes = solveTaskOne("data/dump_002.DMP", "data/encr_002");
-        if(bytes == null){
+        if (bytes == null) {
             throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
         }
+        System.out.println(Integer.toHexString(bytes[0]));
 
         InputStream is = new ByteArrayInputStream(bytes);
         BufferedImage newBi = ImageIO.read(is);
-        byte[] pixels = getImageToPixels(newBi);
-        System.out.println(pixels.length);
+        List<Integer> byteList = new ArrayList<>();
+        for(int i = 0; i < newBi.getWidth(); i++){
+            for(int j = 0; j < newBi.getHeight(); j++){
+                Color c = new Color(newBi.getRGB(i, j), true);
+                //System.out.println( newBi.getRGB(i, j) + " " + Integer.toHexString(newBi.getRGB(i, j) & 0xFF));
+                int red = c.getRed();
+                int green = c.getGreen();
+                int blue = c.getBlue();
+                int alpha = c.getAlpha();
+                byte RGB = (byte)((red << 5) | (green << 2) | blue);
+                System.out.println(Integer.toHexString(red) + " " + Integer.toHexString(green) + " " + Integer.toHexString(blue) + " " + Integer.toHexString(alpha));
 
-        String str = "password";
+                //byte[] b = new byte[]{(byte) red, (byte) green, (byte) blue, (byte) alpha};
+                //byteList.add(crc8(RGB));
 
-        byte[] passWordBytes = str.getBytes(StandardCharsets.UTF_8);
 
-        List<Byte> allGoodInitial = new ArrayList<>();
-        List<Byte> allGoodPolynoms = new ArrayList<>();
-
-        for(byte initial = -127; initial < 127; initial++){
-            boolean good = false;
-            for(byte polyminal = -127; polyminal < 127; polyminal++){
-                int ans = crc8(passWordBytes, initial, polyminal);
-                if(ans == 0xCF){
-                    good = true;
-
-                }
-                allGoodPolynoms.add(polyminal);
             }
-            allGoodInitial.add(initial);
-            //if(good)
-
+            return;
         }
-
-        Byte ansPol = null;
-        Byte ansInit = null;
-        for(Byte polByte : allGoodPolynoms){
-            for(Byte initByte : allGoodInitial){
-                boolean good = true;
-                for(int i = 0; i < 2; i++){
-                    int ans = crc8(pixels[i], initByte, polByte);
-                    //System.out.println(ans);
-                    if(ans != jpegBytes[i]) {
-                        good = false;
-                        break;
-                    }
-                }
-                if(good){
-                    ansPol = polByte;
-                    ansInit = initByte;
-                }
-            }
+        byte[] answer = new byte[byteList.size()];
+        for(int i = 0; i < answer.length; i++){
+            answer[i] = byteList.get(i).byteValue();
         }
+        System.out.println((answer[0]) + " " + jpegBytes[0] + " " + pngBytes[0]);
+        System.out.println((answer[1]) + " " + jpegBytes[1] + " " + pngBytes[1]);
 
-        if(ansPol == null){
-            throw new IllegalArgumentException("Полином не был найден! Что то не так");
-        }
-        System.out.println("Полином " + ansPol);
-        System.out.println("Инит " + ansInit);
 
-        byte[] data = new byte[pixels.length];
 
-        int i = 0;
-        for(byte b : pixels){
-            byte ans = (byte)crc8(b, ansInit, ansPol);
-            data[i] = ans;
-            i++;
-        }
-
-        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        /*ByteArrayInputStream bis = new ByteArrayInputStream(answer);
         BufferedImage bImage2 = ImageIO.read(bis);
-        ImageIO.write(bImage2, "jpeg", new File("./output1.jpeg") );
+        ImageIO.write(bImage2, "jpg", new File("./output.jpg"));*/
+
     }
 
     private static List<byte[]> getKey(byte[] data){
@@ -144,18 +116,17 @@ public class Main{
         return bytes;
     }
 
-    public static byte[] getImageToPixels(BufferedImage bufferedImage) {
+    public static int[][] getImageToPixels(BufferedImage bufferedImage) {
         if (bufferedImage == null) {
             throw new IllegalArgumentException();
         }
-        return ((DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
-    /*    int h = bufferedImage.getHeight();
+        int h = bufferedImage.getHeight();
         int w = bufferedImage.getWidth();
         int[][] pixels = new int[h][w];
         for (int i = 0; i < h; i++) {
             bufferedImage.getRGB(0, i, w, 1, pixels[i], 0, w);
         }
-        return pixels;*/
+        return pixels;
     }
 
 
@@ -168,42 +139,29 @@ public class Main{
         return cipher.doFinal(cipherText);
     }
 
-
     private static SecretKeySpec createKeySpec(byte[] key){
         return new SecretKeySpec(key, "AES");
     }
 
-
-    public static int crc8(byte[] data, byte crcInit, byte poly) {
-        int _crc = crcInit;
-        for (int value : data) {
-            _crc = _crc ^ value;
-            for (int i = 8; i > 0; i--) {
-                if ((_crc & (1 << 7)) > 0) {
-                    _crc <<= 1;
-                    _crc ^= poly;
-                } else {
-                    _crc <<= 1;
-                }
+    public static int crc8(byte[] data) {
+        int crc = 0xff;
+        for (byte datum : data) {
+            crc = (crc ^ datum);
+            for (int j = 0; j < 8; j++) {
+                crc =  (crc & 0x80) != 0 ? ((crc<<1) ^ 0x1D) :  (crc << 1);
             }
         }
-       return  (_crc & 0xff);
+        crc &=  0xFF;
+        crc ^=  0xFF;
+        return crc;
     }
 
-    public static int crc8(byte data, byte crcInit, byte poly) {
-        int _crc = crcInit ^ data;
-        for (int i = 8; i > 0; i--) {
-            if ((_crc & (1 << 7)) > 0) {
-                _crc <<= 1;
-                _crc ^= poly;
-            } else {
-                _crc <<= 1;
-            }
-        }
-        return  (_crc & 0xff);
+    public static int crc8(byte data) {
+        return crc8(new byte[]{data});
     }
 
-    public static int uint(byte v) {
-        return v & 0xFF;
+    public static int crc8(int data) {
+        return crc8(new byte[]{(byte)data});
     }
 }
+
