@@ -56,11 +56,11 @@
   Прогоняем каждый пиксель через через этот алгоритм - на выходе очередной байт. Псевдо код:
     
 ```
+byteList = new List();
 for each pixel:
     blue = pixel.blue();
     green = pixel.green();
     red = pixe.red();
-    byteList = new List();
     byte[] rgbByteArray = new byte[]{(byte) blue, (byte) green,   (byte) red, (byte)0x00};
     int newByte = crc8(rgbByteArray);
     byteList.add(newByte);
