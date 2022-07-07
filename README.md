@@ -53,9 +53,13 @@
 ```
     
  Сюда подставляем первоначальное значение crc (init=0xff) и так же полином  0x1D. В конце делаем бинарное умножение и xor (xorout=0xff)
-  Прогоняем каждый пиксель через через этот алгоритм - на выходе очередной байт
+  Прогоняем каждый пиксель через через этот алгоритм - на выходе очередной байт. Псевдо код:
     
 ```
+for each pixel:
+    blue = pixel.blue();
+    green = pixel.green();
+    red = pixe.red();
     byteList = new List();
     byte[] rgbByteArray = new byte[]{(byte) blue, (byte) green,   (byte) red, (byte)0x00};
     int newByte = crc8(rgbByteArray);
