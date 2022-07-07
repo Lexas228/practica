@@ -1,14 +1,21 @@
 package ru.vsu.main;
 
+import com.drew.imaging.ImageMetadataReader;
+import com.drew.imaging.ImageProcessingException;
+import com.drew.metadata.Metadata;
 import org.apache.commons.imaging.ImageInfo;
-import org.apache.commons.imaging.ImageParser;
 import org.apache.commons.imaging.ImageReadException;
+import org.apache.commons.imaging.ImageWriteException;
+import org.apache.commons.imaging.common.ImageMetadata;
 import org.apache.commons.imaging.common.bytesource.ByteSourceArray;
-import org.apache.commons.imaging.common.bytesource.ByteSourceInputStream;
 import org.apache.commons.imaging.formats.jpeg.JpegConstants;
 import org.apache.commons.imaging.formats.jpeg.JpegImageParser;
+import org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter;
 import org.apache.commons.imaging.formats.tiff.JpegImageData;
-import org.apache.commons.imaging.formats.tiff.TiffImageParser;
+import org.apache.commons.imaging.formats.tiff.write.TiffOutputSet;
+import org.apache.tika.exception.TikaException;
+import org.apache.tika.parser.image.ImageMetadataExtractor;
+import org.xml.sax.SAXException;
 
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
@@ -17,15 +24,13 @@ import javax.imageio.ImageIO;
 import javax.imageio.plugins.jpeg.JPEGImageReadParam;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class Main{
@@ -35,13 +40,28 @@ public class Main{
     private static final Set<Integer> flags;
     static {
         flags = new HashSet<>();
-        flags.addAll(JpegConstants.MARKERS);
+        flags.add(0xE1);
+        flags.add(0xE2);
+        flags.add(0xE3);
+        flags.add(0xE4);
+        flags.add(0xE5);
+        flags.add(0xE6);
+        flags.add(0xE7);
+        flags.add(0xE8);
+        flags.add(0xE9);
+        flags.add(0xEA);
+        flags.add(0xEB);
+        flags.add(0xEC);
+        flags.add(0xED);
+        flags.add(0xEE);
+        flags.add(0xEF);
+        flags.add(0xFE);
     }
     public Main(){
 
     }
 
-    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, ImageReadException {
+    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, ImageReadException, TikaException, SAXException, ImageProcessingException, ImageWriteException {
         Pair<byte[], byte[]> taskOne = solveTaskOne("data/dump_002.DMP", "data/encr_002");
         if (taskOne == null) {
             throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
@@ -49,39 +69,50 @@ public class Main{
         byte[] dataFromTaskOne = taskOne.getSecond();
 
         byte[] taskTwo = solveTaskTwo(dataFromTaskOne);
-        List<Byte> allMarkers = new ArrayList<>();
-        List<Byte> cleanFile = new ArrayList<>();
 
-        for(int i = 0; i < taskTwo.length; i++){
-            byte curr = taskTwo[i];
-            if(Byte.toUnsignedInt(curr) == 0xFF && flags.contains(Byte.toUnsignedInt(taskTwo[i+1]))){
-                allMarkers.add(curr);
-                allMarkers.add(taskTwo[i+1]);
-            }else if (Byte.toUnsignedInt(curr) != 0xFF){
+        List<Byte> cleanTaskTwo = new ArrayList<>();
+        int s = 0;
 
-                cleanFile.add(curr);
+        while(s < taskTwo.length){
+
+
+            if(Byte.toUnsignedInt(taskTwo[s]) == 0xFF && Byte.toUnsignedInt(taskTwo[s+1]) == 0xF9){
+                cleanTaskTwo.add(taskTwo[s]);
+                cleanTaskTwo.add(taskTwo[s+1]);
+                break;
             }
+            cleanTaskTwo.add(taskTwo[s]);
+            s++;
         }
 
-        byte[] markersByteArray = new byte[allMarkers.size()];
-        byte[] cleanFileByteArray = new byte[cleanFile.size()];
-        for(int i = 0; i < allMarkers.size(); i++){
-            markersByteArray[i] = allMarkers.get(i);
-        }
+        Metadata metadata = new Metadata();
 
-        for(int i = 0; i < allMarkers.size(); i++){
-            cleanFileByteArray[i] = cleanFile.get(i);
-        }
-        System.out.println(markersByteArray.length % 16);
+        List<Byte> dirtyInfo = new ArrayList<>();
 
+        while(s < taskTwo.length){
+           // System.out.print("0x" + Integer.toHexString(taskTwo[s]) + " ");
+            dirtyInfo.add(taskTwo[s]);
+            s++;
+        }
+        //System.out.println(dirtyInfo.size() % 16);
+
+
+        byte[] cleanTaskTwoBytes = new byte[cleanTaskTwo.size()];
+        for(int i = 0; i < cleanTaskTwoBytes.length; i++){
+            cleanTaskTwoBytes[i] = cleanTaskTwo.get(i);
+        }
+        byte[] dirtyInfoBytes = new byte[dirtyInfo.size()];
+        for(int i = 0; i < dirtyInfoBytes.length; i++){
+            dirtyInfoBytes[i] = dirtyInfo.get(i);
+        }
 
 
         MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] hash = md.digest(cleanFileByteArray);
+        byte[] hash = md.digest(cleanTaskTwoBytes);
 
-        byte[] bytes = decryptCbc(markersByteArray, new SecretKeySpec(hash, "AES"), new IvParameterSpec(taskOne.getFirst()));
-
-
+        byte[] bytes = decryptCbc(dirtyInfoBytes, new SecretKeySpec(hash, "AES"), new IvParameterSpec(taskOne.getFirst()));
+        String l = new String(bytes);
+        System.out.println(l.length());
     }
 
     private static List<byte[]> getKey(byte[] data){
@@ -176,7 +207,8 @@ public class Main{
             InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
+        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+        //PKCS5PADDING
         cipher.init(Cipher.DECRYPT_MODE, key, ivParameterSpec);
         return cipher.doFinal(cipherText);
     }

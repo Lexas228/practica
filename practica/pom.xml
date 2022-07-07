@@ -32,6 +32,31 @@
     </dependency>
     <!-- Thanks for using https://jar-download.com -->
 
+    <!-- https://mvnrepository.com/artifact/org.apache.tika/tika-parsers -->
+    <!-- https://mvnrepository.com/artifact/org.apache.tika/tika-core -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>2.4.1</version>
+    </dependency>
+
+    <!-- https://mvnrepository.com/artifact/org.apache.tika/tika-parser-image-module -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parser-image-module</artifactId>
+      <version>2.4.1</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.drewnoakes</groupId>
+      <artifactId>metadata-extractor</artifactId>
+      <version>2.18.0</version>
+    </dependency>
+
+
+
+
+    <!-- Thanks for using https://jar-download.com -->
 
 
   </dependencies>
