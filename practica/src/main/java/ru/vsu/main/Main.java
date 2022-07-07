@@ -1,30 +1,21 @@
 package ru.vsu.main;
 
-import com.drew.imaging.ImageMetadataReader;
 import com.drew.imaging.ImageProcessingException;
-import com.drew.metadata.Metadata;
-import org.apache.commons.imaging.ImageInfo;
 import org.apache.commons.imaging.ImageReadException;
 import org.apache.commons.imaging.ImageWriteException;
-import org.apache.commons.imaging.common.ImageMetadata;
-import org.apache.commons.imaging.common.bytesource.ByteSourceArray;
-import org.apache.commons.imaging.formats.jpeg.JpegConstants;
-import org.apache.commons.imaging.formats.jpeg.JpegImageParser;
-import org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter;
-import org.apache.commons.imaging.formats.tiff.JpegImageData;
-import org.apache.commons.imaging.formats.tiff.write.TiffOutputSet;
 import org.apache.tika.exception.TikaException;
-import org.apache.tika.parser.image.ImageMetadataExtractor;
 import org.xml.sax.SAXException;
 
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
-import javax.imageio.plugins.jpeg.JPEGImageReadParam;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -37,82 +28,25 @@ public class Main{
     private static final int[] pngBytes = new int[]{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xE0};
 
-    private static final Set<Integer> flags;
-    static {
-        flags = new HashSet<>();
-        flags.add(0xE1);
-        flags.add(0xE2);
-        flags.add(0xE3);
-        flags.add(0xE4);
-        flags.add(0xE5);
-        flags.add(0xE6);
-        flags.add(0xE7);
-        flags.add(0xE8);
-        flags.add(0xE9);
-        flags.add(0xEA);
-        flags.add(0xEB);
-        flags.add(0xEC);
-        flags.add(0xED);
-        flags.add(0xEE);
-        flags.add(0xEF);
-        flags.add(0xFE);
-    }
-    public Main(){
-
-    }
-
-    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, ImageReadException, TikaException, SAXException, ImageProcessingException, ImageWriteException {
-        Pair<byte[], byte[]> taskOne = solveTaskOne("data/dump_002.DMP", "data/encr_002");
+    public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, URISyntaxException {
+        byte[] dumpInBytes = FileUtil.readData("data/dump_001.DMP");
+        byte[] encrDataInBytes = FileUtil.readData("data/encr_001");
+        Pair<byte[], byte[]> taskOne = solveTaskOne(dumpInBytes, encrDataInBytes);
         if (taskOne == null) {
             throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
+        }else{
+            System.out.println("Первое задание решено! Ключ = "  + new String(taskOne.getFirst()));
+            FileUtil.writeData("firstTaskRes.png", taskOne.getSecond());
+            System.out.println("Картинка записана в ./firstTaskRes.png");
         }
         byte[] dataFromTaskOne = taskOne.getSecond();
-
         byte[] taskTwo = solveTaskTwo(dataFromTaskOne);
-
-        List<Byte> cleanTaskTwo = new ArrayList<>();
-        int s = 0;
-
-        while(s < taskTwo.length){
-
-
-            if(Byte.toUnsignedInt(taskTwo[s]) == 0xFF && Byte.toUnsignedInt(taskTwo[s+1]) == 0xF9){
-                cleanTaskTwo.add(taskTwo[s]);
-                cleanTaskTwo.add(taskTwo[s+1]);
-                break;
-            }
-            cleanTaskTwo.add(taskTwo[s]);
-            s++;
-        }
-
-        Metadata metadata = new Metadata();
-
-        List<Byte> dirtyInfo = new ArrayList<>();
-
-        while(s < taskTwo.length){
-           // System.out.print("0x" + Integer.toHexString(taskTwo[s]) + " ");
-            dirtyInfo.add(taskTwo[s]);
-            s++;
-        }
-        //System.out.println(dirtyInfo.size() % 16);
-
-
-        byte[] cleanTaskTwoBytes = new byte[cleanTaskTwo.size()];
-        for(int i = 0; i < cleanTaskTwoBytes.length; i++){
-            cleanTaskTwoBytes[i] = cleanTaskTwo.get(i);
-        }
-        byte[] dirtyInfoBytes = new byte[dirtyInfo.size()];
-        for(int i = 0; i < dirtyInfoBytes.length; i++){
-            dirtyInfoBytes[i] = dirtyInfo.get(i);
-        }
-
-
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] hash = md.digest(cleanTaskTwoBytes);
-
-        byte[] bytes = decryptCbc(dirtyInfoBytes, new SecretKeySpec(hash, "AES"), new IvParameterSpec(taskOne.getFirst()));
-        String l = new String(bytes);
-        System.out.println(l.length());
+        System.out.println("Второе задание решено!");
+        FileUtil.writeData("secondTask.jpeg", taskTwo);
+        System.out.println("Картнка записана в ./secondTask.jpeg");
+        byte[] keyFromTaskOne = taskOne.getFirst();
+        byte[] taskThreeRes = solveTaskThree(keyFromTaskOne, taskTwo);
+        System.out.println("Ответ на третье задание найдено! Ключ = " + new String(taskThreeRes));
     }
 
     private static List<byte[]> getKey(byte[] data){
@@ -132,11 +66,16 @@ public class Main{
         return allCount.keySet().stream().filter(key -> allCount.get(key).equals(2)).map(BitSet::toByteArray).collect(Collectors.toList());
     }
 
+    private static byte[] getByteArrayFromList(List<Byte> byteList){
+        byte[] bytes = new byte[byteList.size()];
+        for(int i = 0; i < bytes.length; i++){
+            bytes[i] = byteList.get(i);
+        }
+        return bytes;
+    }
 
-    private static Pair<byte[], byte[]> solveTaskOne(String pathToDump, String pathToData) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
 
-        byte[] dumpInBytes = readData(pathToDump);
-        byte[] encrDataInBytes = readData(pathToData);
+    private static Pair<byte[], byte[]> solveTaskOne(byte[] dumpInBytes, byte[] encrDataInBytes) throws NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
         List<byte[]> keys = getKey(dumpInBytes);
 
         for(byte[] key : keys){
@@ -149,11 +88,40 @@ public class Main{
                 }
             }
             if(good) {
-                System.out.println("Первое задание решено! Ключ = " + new String(key));
                 return new Pair<>(key, ans);
             }
         }
         return null;
+    }
+
+
+
+    private static byte[] solveTaskThree(byte[] firstTaskKey, byte[] secondTaskRes) throws NoSuchAlgorithmException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+        List<Byte> cleanTaskTwo = new ArrayList<>();
+        int s = 0;
+        while(s < secondTaskRes.length){
+            if(Byte.toUnsignedInt(secondTaskRes[s]) == 0xFF){
+                if(Byte.toUnsignedInt(secondTaskRes[s+1]) == 0xD9){
+                    cleanTaskTwo.add(secondTaskRes[s]);
+                    cleanTaskTwo.add(secondTaskRes[s+1]);
+                    s+=2;
+                    break;
+                }
+            }
+            cleanTaskTwo.add(secondTaskRes[s]);
+            s++;
+        }
+        byte[] cleanTaskTwoBytes = getByteArrayFromList(cleanTaskTwo);
+        byte[] chiperText= new byte[16];
+        int k = 0;
+        for(int i = s; i < s + 16; i++){
+            chiperText[k] = secondTaskRes[i];
+            k++;
+        }
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] hash = md.digest(cleanTaskTwoBytes);
+
+        return decryptCbc(chiperText, new SecretKeySpec(hash, "AES"), new IvParameterSpec(firstTaskKey));
     }
 
     private static byte[] solveTaskTwo(byte[] arrayOfTaskOne) throws IOException {
@@ -180,18 +148,11 @@ public class Main{
                 throw new IllegalArgumentException("Ошибка во втором здании, формат не jpeg!");
             }
         }
-        System.out.println("Задание два решено успешно!");
         return answer;
     }
 
     
-    private static byte[] readData(String path) throws IOException {
-        ClassLoader classLoader = Main.class.getClassLoader();
-        InputStream inputStream = classLoader.getResourceAsStream(path);
-        byte[] bytes = new byte[Objects.requireNonNull(inputStream).available()];
-        int read = inputStream.read(bytes);
-        return bytes;
-    }
+
 
 
     private static byte[] decryptEcb(byte[] cipherText, SecretKey key) throws NoSuchPaddingException, NoSuchAlgorithmException,
@@ -228,14 +189,6 @@ public class Main{
         crc &=  0xFF;
         crc ^=  0xFF;
         return crc;
-    }
-
-    public static int crc8(byte data) {
-        return crc8(new byte[]{data});
-    }
-
-    public static int crc8(int data) {
-        return crc8(new byte[]{(byte)data});
     }
 }
 
