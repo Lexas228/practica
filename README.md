@@ -9,15 +9,16 @@
   
  ```
  
-  private static List<byte[]> filterKeys(List<byte[]> bytes){
+    private static List<byte[]> filterKeys(List<byte[]> bytes, int maxValue){
        return bytes.stream().filter(byteArray -> {
             Map<Byte, Integer> byteCount = new HashMap<>();
+            int max = -1;
             for(byte bt : byteArray){
-                byteCount.put(bt, byteCount.getOrDefault(bt, 0) + 1);
+                int next = byteCount.getOrDefault(bt, 0) + 1;
+                byteCount.put(bt, next);
+                max = Math.max(max, next);
             }
-            Byte aByte = byteCount.keySet().stream().max(Comparator.comparingInt(byteCount::get)).orElse(null);
-            //здесь константа может варироваться
-            return aByte != null && byteCount.get(aByte) <= 2;
+            return max <= maxValue;
         }).collect(Collectors.toList());
     }
  
