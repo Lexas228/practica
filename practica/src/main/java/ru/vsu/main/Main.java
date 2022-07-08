@@ -54,7 +54,6 @@ public class Main{
 
         for(int i = 0; i < data.length; i++){
             byte[] b = new byte[16];
-
             for(int j = i, s = 0; j < i + 16 && j < data.length; j++, s++){
                 b[s] = data[j];
             }
@@ -77,8 +76,11 @@ public class Main{
 
     private static Pair<byte[], byte[]> solveTaskOne(byte[] dumpInBytes, byte[] encrDataInBytes) throws NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
         List<byte[]> keys = getKey(dumpInBytes);
+        System.out.println("Общее кол-во ключей: " + keys.size());
+        List<byte[]> keysAfterFilter = filterKeys(keys);
+        System.out.println("Общее кол-во ключей после фильтрации: " + keysAfterFilter.size());
 
-        for(byte[] key : keys){
+        for(byte[] key : keysAfterFilter){
             byte[] ans = decryptEcb(encrDataInBytes, createKeySpec(key));
             boolean good = true;
             for(int i = 0; i < pngBytes.length; i++){
@@ -92,6 +94,19 @@ public class Main{
             }
         }
         return null;
+    }
+
+
+    private static List<byte[]> filterKeys(List<byte[]> bytes){
+       return bytes.stream().filter(byteArray -> {
+            Map<Byte, Integer> byteCount = new HashMap<>();
+            for(byte bt : byteArray){
+                byteCount.put(bt, byteCount.getOrDefault(bt, 0) + 1);
+            }
+            Byte aByte = byteCount.keySet().stream().max(Comparator.comparingInt(byteCount::get)).orElse(null);
+            //здесь константа может варироваться
+            return aByte != null && byteCount.get(aByte) <= 2;
+        }).collect(Collectors.toList());
     }
 
 
