@@ -115,7 +115,7 @@ private static byte[] decryptCbc(byte[] cipherText, SecretKey key, IvParameterSp
 
 ```
 
-> Получаем шифр. Готово! (rCv4pyR43dVbe9SH)
+ Получаем шифр. Готово! (rCv4pyR43dVbe9SH)
 
 
 ### Usage по использованию программы:
