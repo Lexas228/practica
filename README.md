@@ -5,19 +5,20 @@
   По подсказкам узнаем что ключ в файле встречается дважды. В результате должны получить png файл.
  - Решение:
   > Переберем все возможные 16 символьные значения из файла, отфильтруем только те которые встречаются дважды. Получили около 15к таких значений.
-  На этом моменте оказалось много вопросов... Чтобы уменьшить количество кандидатов, отфильтруем полученные ключи. В подсказке сказано, что ключи должны быть хаотичны, поэтому встречаемые символы в ключе должны повторяться минимально. В данной фильтрации я взял константу == 2. Если в другом варианте найти не получится, можно увеличить.
+  На этом моменте оказалось много вопросов... Чтобы уменьшить количество кандидатов, отфильтруем полученные ключи. В подсказке сказано, что ключи должны быть хаотичны, поэтому встречаемые символы в ключе должны повторяться минимально. Для первого варианта maxValue подошло = 1, в некоторых других может быть 2 и более
   
  ```
  
-  private static List<byte[]> filterKeys(List<byte[]> bytes){
+    private static List<byte[]> filterKeys(List<byte[]> bytes, int maxValue){
        return bytes.stream().filter(byteArray -> {
             Map<Byte, Integer> byteCount = new HashMap<>();
+            int max = -1;
             for(byte bt : byteArray){
-                byteCount.put(bt, byteCount.getOrDefault(bt, 0) + 1);
+                int next = byteCount.getOrDefault(bt, 0) + 1;
+                byteCount.put(bt, next);
+                max = Math.max(max, next);
             }
-            Byte aByte = byteCount.keySet().stream().max(Comparator.comparingInt(byteCount::get)).orElse(null);
-            //здесь константа может варироваться
-            return aByte != null && byteCount.get(aByte) <= 2;
+            return max <= maxValue;
         }).collect(Collectors.toList());
     }
  
