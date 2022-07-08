@@ -77,8 +77,17 @@ public class Main{
     private static Pair<byte[], byte[]> solveTaskOne(byte[] dumpInBytes, byte[] encrDataInBytes) throws NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
         List<byte[]> keys = getKey(dumpInBytes);
         System.out.println("Общее кол-во ключей: " + keys.size());
-        List<byte[]> keysAfterFilter = filterKeys(keys);
+        List<byte[]> keysAfterFilter = filterKeys(keys, 1);
         System.out.println("Общее кол-во ключей после фильтрации: " + keysAfterFilter.size());
+        int attempt = 1;
+        while (keysAfterFilter.isEmpty()){
+            System.out.println("Попытка увеличить максимальное значение встречающихся ключей #" + 1);
+            keysAfterFilter = filterKeys(keys, 1+attempt);
+            attempt++;
+            if(attempt > 16){
+                throw new IllegalStateException("Ключ не был найден");
+            }
+        }
 
         for(byte[] key : keysAfterFilter){
             byte[] ans = decryptEcb(encrDataInBytes, createKeySpec(key));
@@ -97,15 +106,17 @@ public class Main{
     }
 
 
-    private static List<byte[]> filterKeys(List<byte[]> bytes){
+    private static List<byte[]> filterKeys(List<byte[]> bytes, int maxValue){
        return bytes.stream().filter(byteArray -> {
             Map<Byte, Integer> byteCount = new HashMap<>();
+            int max = -1;
             for(byte bt : byteArray){
-                byteCount.put(bt, byteCount.getOrDefault(bt, 0) + 1);
+                int next = byteCount.getOrDefault(bt, 0) + 1;
+                byteCount.put(bt, next);
+                max = Math.max(max, next);
             }
-            Byte aByte = byteCount.keySet().stream().max(Comparator.comparingInt(byteCount::get)).orElse(null);
             //здесь константа может варироваться
-            return aByte != null && byteCount.get(aByte) <= 2;
+            return max <= maxValue;
         }).collect(Collectors.toList());
     }
 
