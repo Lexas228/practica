@@ -29,11 +29,11 @@ public class Main{
     private static final int[] jpegBytes = new int[]{0xFF,0xD8, 0xFF, 0xE0};
 
     public static void main(String[] args) throws IOException, NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, URISyntaxException {
-        byte[] dumpInBytes = FileUtil.readData("data/dump_001.DMP");
-        byte[] encrDataInBytes = FileUtil.readData("data/encr_001");
+        byte[] dumpInBytes = FileUtil.readData("data/dump_007.DMP");
+        byte[] encrDataInBytes = FileUtil.readData("data/encr_007");
         Pair<byte[], byte[]> taskOne = solveTaskOne(dumpInBytes, encrDataInBytes);
         if (taskOne == null) {
-            throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути");
+            throw new IllegalArgumentException("Ответ на первое задание не был найден, проверьте корректность указанного пути или увеличьте константу для фильтрации в filterKeys");
         }else{
             System.out.println("Первое задание решено! Ключ = "  + new String(taskOne.getFirst()));
             FileUtil.writeData("firstTaskRes.png", taskOne.getSecond());
@@ -77,18 +77,8 @@ public class Main{
     private static Pair<byte[], byte[]> solveTaskOne(byte[] dumpInBytes, byte[] encrDataInBytes) throws NoSuchPaddingException, IllegalBlockSizeException, NoSuchAlgorithmException, BadPaddingException, InvalidKeyException {
         List<byte[]> keys = getKey(dumpInBytes);
         System.out.println("Общее кол-во ключей: " + keys.size());
-        List<byte[]> keysAfterFilter = filterKeys(keys, 1);
-        System.out.println("Общее кол-во ключей после фильтрации: " + keysAfterFilter.size());
-        int attempt = 1;
-        while (keysAfterFilter.isEmpty()){
-            System.out.println("Попытка увеличить максимальное значение встречающихся ключей #" + 1);
-            keysAfterFilter = filterKeys(keys, 1+attempt);
-            attempt++;
-            if(attempt > 16){
-                throw new IllegalStateException("Ключ не был найден");
-            }
-        }
-
+        List<byte[]> keysAfterFilter = filterKeys(keys, 2);
+        System.out.println("Кол-во ключей после фильтрации: " + keysAfterFilter.size());
         for(byte[] key : keysAfterFilter){
             byte[] ans = decryptEcb(encrDataInBytes, createKeySpec(key));
             boolean good = true;
