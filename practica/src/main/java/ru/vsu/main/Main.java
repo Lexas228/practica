@@ -115,7 +115,6 @@ public class Main{
                 byteCount.put(bt, next);
                 max = Math.max(max, next);
             }
-            //здесь константа может варироваться
             return max <= maxValue;
         }).collect(Collectors.toList());
     }
